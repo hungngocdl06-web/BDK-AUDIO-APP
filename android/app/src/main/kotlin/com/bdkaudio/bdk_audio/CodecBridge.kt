@@ -345,7 +345,12 @@ class CodecBridge(private val activity: Activity, messenger: BinaryMessenger) : 
         }
     }
 
-    private fun hasPermission() = Build.VERSION.SDK_INT < 31 || activity.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+    private fun hasPermission() = if (Build.VERSION.SDK_INT >= 31) {
+        activity.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED &&
+        activity.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
+    } else {
+        activity.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    }
 
     private fun requestProxy() {
         if (closed.get() || profileRequested || a2dp != null || !hasPermission()) return
@@ -510,7 +515,12 @@ class CodecBridge(private val activity: Activity, messenger: BinaryMessenger) : 
         if (consent != null) { result.error("codecBusy", "A Bluetooth permission or companion consent is already open.", null); return }
         val pending = Consent(result, null, true)
         beginConsent(pending, 120_000)
-        try { activity.requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), pending.requestCode) }
+        val permissions = if (Build.VERSION.SDK_INT >= 31) {
+            arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
+        } else {
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+        try { activity.requestPermissions(permissions, pending.requestCode) }
         catch (error: Exception) { finishConsent(pending); result.error("permissionUnavailable", rootCause(error).message, null) }
     }
 

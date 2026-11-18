@@ -71,30 +71,27 @@ class SpeakerSetupController extends ChangeNotifier {
   bool get checkingAudio => _active && (loading || _audioDiscoveryActive);
   bool get audioSearchCompleted => _audioDiscoveryCompleted;
   bool get preparingControls => _searchRequest != null;
-  bool get audioReady =>
-      !audio.permissionRequired &&
-      (audio.canVerifyIdentity
-          ? (audio.devices.any((d) => _same(d.id, selectedAudioId)) ||
-             audio.devices.isNotEmpty ||
-             manualAudioConfirmed)
-          : manualAudioConfirmed);
+  bool get audioReady => !audio.permissionRequired;
   AudioDeviceIdentity? get selectedAudioDevice =>
       audio.devices.where((d) => _same(d.id, selectedAudioId)).firstOrNull ??
       audio.devices.firstOrNull;
-  List<DiscoveredSpeaker> get controlDevices => !audioReady
-      ? const []
-      : session.devices.value
-            .where(
-              (d) =>
-                  d.services.any(
-                    (s) => s.toLowerCase() == SpeakerProtocol.service,
-                  ) ||
-                  d.name.toLowerCase().contains('dsp') ||
-                  d.name.toLowerCase().contains('bdk'),
-            )
-            .toList();
+  List<DiscoveredSpeaker> get controlDevices =>
+      session.devices.value
+          .where(
+            (d) =>
+                d.services.any(
+                  (s) =>
+                      s.replaceAll('-', '').toLowerCase() ==
+                      SpeakerProtocol.service.replaceAll('-', '').toLowerCase(),
+                ) ||
+                d.name.toLowerCase().contains('dsp') ||
+                d.name.toLowerCase().contains('bdk'),
+          )
+          .toList();
   bool _same(String? a, String? b) =>
       a != null && b != null && a.toLowerCase() == b.toLowerCase();
+  bool _sameOrBothNull(String? a, String? b) =>
+      (a == null && b == null) || _same(a, b);
   void _notify() {
     if (!_disposed) notifyListeners();
   }
@@ -338,7 +335,7 @@ class SpeakerSetupController extends ChangeNotifier {
       }
       return;
     }
-    if (!_same(_autoAudioId, selectedAudioId)) {
+    if (!_sameOrBothNull(_autoAudioId, selectedAudioId)) {
       _clearAutoTimer();
       _autoAudioId = selectedAudioId;
       _autoRetries = 0;
@@ -390,7 +387,7 @@ class SpeakerSetupController extends ChangeNotifier {
       _autoCandidate = null;
       if (!_canAuto ||
           generation != _generation ||
-          !_same(audioId, selectedAudioId)) {
+          !_sameOrBothNull(audioId, selectedAudioId)) {
         return;
       }
       unawaited(_runAuto(candidate));
@@ -500,6 +497,7 @@ class SpeakerSetupController extends ChangeNotifier {
       final changedAttempt =
           connecting &&
           audio.canVerifyIdentity &&
+          _connectingAudioId != null &&
           (!_same(selectedAudioId, _connectingAudioId) ||
               !audio.devices.any((d) => _same(d.id, _connectingAudioId)));
       final changedReady =
@@ -573,7 +571,7 @@ class SpeakerSetupController extends ChangeNotifier {
   }
 
   void confirmManagedAudio() {
-    if (_disposed || audio.canVerifyIdentity) return;
+    if (_disposed) return;
     manualAudioConfirmed = true;
     message = null;
     _notify();
@@ -628,7 +626,7 @@ class SpeakerSetupController extends ChangeNotifier {
       _clearAutoTimer();
       if (!audioReady) {
         message =
-            'Connect your speaker for Bluetooth audio first, then search for controls.';
+            'Allow Bluetooth access first, then search for controls.';
         return;
       }
       if (session.state.value.connected) {
@@ -677,9 +675,9 @@ class SpeakerSetupController extends ChangeNotifier {
       if (_disposed || generation != _generation || (automatic && !_canAuto)) {
         return;
       }
-      if (!audioReady || !controlDevices.any((d) => _same(d.id, id))) {
+      if (!controlDevices.any((d) => _same(d.id, id))) {
         message =
-            'Connect this speaker for Bluetooth audio first, then search again.';
+            'Speaker controls not found. Search again.';
         return;
       }
       await session.connect(id);

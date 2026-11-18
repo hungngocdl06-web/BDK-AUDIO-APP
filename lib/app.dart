@@ -1309,7 +1309,7 @@ class _BdkAppState extends State<BdkApp> with WidgetsBindingObserver {
         setup?.audio ?? const AudioConnectionSnapshot(canVerifyIdentity: false);
     final devices = setup?.controlDevices ?? const [];
     return SpeakerPairingScreen(
-      stage: _switchingSpeaker
+      stage: (_switchingSpeaker && audio.devices.isNotEmpty)
           ? PairingStage.audio
           : setup?.connecting == true
           ? PairingStage.connecting

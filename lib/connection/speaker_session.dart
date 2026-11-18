@@ -54,13 +54,15 @@ class SpeakerSession {
 
   void _onDiscovered(DiscoveredSpeaker device) {
     if (_disposed || state.value.phase != ConnectionPhase.scanning) return;
+    final cleanService = SpeakerProtocol.service.replaceAll('-', '').toLowerCase();
     final matchesService = device.services.any(
-      (s) => s.toLowerCase() == SpeakerProtocol.service,
+      (s) => s.replaceAll('-', '').toLowerCase() == cleanService,
     );
+    final name = device.name.trim();
     final matchesName = RegExp(
-      r'^BDK(?:[\s_-]|$)',
+      r'(?:BDK|DSP)',
       caseSensitive: false,
-    ).hasMatch(device.name.trim());
+    ).hasMatch(name);
     if (!matchesService && !matchesName) return;
     final next = [...devices.value];
     final index = next.indexWhere((d) => d.id == device.id);

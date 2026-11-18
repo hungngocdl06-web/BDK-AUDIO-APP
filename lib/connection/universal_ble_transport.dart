@@ -7,21 +7,34 @@ import 'ble_transport.dart';
 export 'ble_transport.dart' show BleTransportException;
 
 class UniversalBleTransport implements BleTransport {
-  UniversalBleTransport({this.timeout = const Duration(seconds: 10)});
+  UniversalBleTransport({this.timeout = const Duration(seconds: 10)}) {
+    _scanSub = UniversalBle.scanStream.listen(
+      (device) {
+        if (!_scanController.isClosed) {
+          _scanController.add(DiscoveredSpeaker(
+            id: device.deviceId,
+            name: device.rawName ?? device.name ?? 'Unnamed speaker',
+            rssi: device.rssi,
+            services: List.unmodifiable(device.services),
+          ));
+        }
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (!_scanController.isClosed) {
+          _scanController.addError(error, stackTrace);
+        }
+      },
+    );
+  }
   final Duration timeout;
   final _links = <_UniversalBleLink>{};
   final _devices = <String, _DeviceConnectionOwner>{};
+  final _scanController = StreamController<DiscoveredSpeaker>.broadcast();
+  StreamSubscription<BleDevice>? _scanSub;
   bool _disposed = false;
 
   @override
-  Stream<DiscoveredSpeaker> get scanResults => UniversalBle.scanStream.map(
-    (device) => DiscoveredSpeaker(
-      id: device.deviceId,
-      name: device.rawName ?? device.name ?? 'Unnamed speaker',
-      rssi: device.rssi,
-      services: List.unmodifiable(device.services),
-    ),
-  );
+  Stream<DiscoveredSpeaker> get scanResults => _scanController.stream;
 
   void _checkAlive() {
     if (_disposed) {
@@ -58,10 +71,22 @@ class UniversalBleTransport implements BleTransport {
   @override
   Future<void> startScan() async {
     await _ensureAvailable();
-    // Filtering in the session allows service advertisements and legacy BDK
-    // names; neither path silently selects one of multiple candidates.
-    // Foreground setup owns the scan lifetime and stops it on exit/background.
-    // Android otherwise defaults to low-power discovery rather than prompt setup.
+    try {
+      final systemDevices = await UniversalBle.getSystemDevices(
+        withServices: [SpeakerProtocol.service],
+      );
+      for (final device in systemDevices) {
+        if (!_scanController.isClosed) {
+          _scanController.add(DiscoveredSpeaker(
+            id: device.deviceId,
+            name: device.rawName ?? device.name ?? 'Unnamed speaker',
+            rssi: -50,
+            services: List.unmodifiable(device.services),
+          ));
+        }
+      }
+    } catch (_) {}
+
     await UniversalBle.startScan(
       platformConfig: PlatformConfig(
         android: AndroidOptions(
@@ -179,6 +204,8 @@ class UniversalBleTransport implements BleTransport {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    _scanSub?.cancel();
+    _scanController.close();
     unawaited(UniversalBle.stopScan().timeout(timeout).catchError((_) {}));
     for (final link in _links.toList()) {
       unawaited(link.disconnect().catchError((_) {}));
