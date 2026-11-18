@@ -91,8 +91,9 @@ jobs:
 
       - name: Build release APK
         run: |
+          flutter build apk --release --no-pub -t lib/main.dart
           flutter build apk --release --no-pub --split-per-abi \
-            --target-platform "${{ inputs.target_platform || 'android-arm64' }}" \
+            --target-platform android-arm64 \
             -t lib/main.dart
 
       - name: List built APKs
@@ -102,6 +103,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: bdk-audio-apk
-          path: build/app/outputs/flutter-apk/*-release.apk
+          path: build/app/outputs/flutter-apk/*.apk
           if-no-files-found: error
           retention-days: 30

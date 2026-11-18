@@ -142,8 +142,7 @@ class _BdkAppState extends State<BdkApp> with WidgetsBindingObserver {
         : null;
     final matched =
         speaker.connected &&
-        id != null &&
-        id.toLowerCase() == speaker.deviceId?.toLowerCase();
+        id != null;
     _audioSummary.configure(
       deviceId: matched ? id : null,
       active:
@@ -1229,7 +1228,7 @@ class _BdkAppState extends State<BdkApp> with WidgetsBindingObserver {
   Future<void> _audioQuality(BuildContext context) async {
     if (_audioQualityOpen) return;
     final allowChanges = !widget.previewOnly && !_demoMode;
-    final deviceId = speaker.deviceId ?? widget.setup?.selectedAudioId;
+    final deviceId = widget.setup?.selectedAudioId ?? speaker.deviceId;
     final factory = widget.codecAdapterFactory ?? () => SystemCodecAdapter();
     _audioQualityOpen = true;
     _syncAudioSummary();

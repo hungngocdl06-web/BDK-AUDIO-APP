@@ -74,10 +74,13 @@ class SpeakerSetupController extends ChangeNotifier {
   bool get audioReady =>
       !audio.permissionRequired &&
       (audio.canVerifyIdentity
-          ? audio.devices.any((d) => _same(d.id, selectedAudioId))
+          ? (audio.devices.any((d) => _same(d.id, selectedAudioId)) ||
+             audio.devices.isNotEmpty ||
+             manualAudioConfirmed)
           : manualAudioConfirmed);
   AudioDeviceIdentity? get selectedAudioDevice =>
-      audio.devices.where((d) => _same(d.id, selectedAudioId)).firstOrNull;
+      audio.devices.where((d) => _same(d.id, selectedAudioId)).firstOrNull ??
+      audio.devices.firstOrNull;
   List<DiscoveredSpeaker> get controlDevices => !audioReady
       ? const []
       : session.devices.value
@@ -85,8 +88,9 @@ class SpeakerSetupController extends ChangeNotifier {
               (d) =>
                   d.services.any(
                     (s) => s.toLowerCase() == SpeakerProtocol.service,
-                  ) &&
-                  (!audio.canVerifyIdentity || _same(d.id, selectedAudioId)),
+                  ) ||
+                  d.name.toLowerCase().contains('dsp') ||
+                  d.name.toLowerCase().contains('bdk'),
             )
             .toList();
   bool _same(String? a, String? b) =>
@@ -473,13 +477,15 @@ class SpeakerSetupController extends ChangeNotifier {
               .firstWhere((d) => _same(d.id, _savedSpeaker!.id))
               .id;
         }
-        if (selectedAudioId == null &&
-            audio.devices.length == 1 &&
-            RegExp(
-              r'^BDK(?:[\s_-]|$)',
+        if (selectedAudioId == null && audio.devices.isNotEmpty) {
+          final candidate = audio.devices.firstWhere(
+            (d) => RegExp(
+              r'^(?:BDK|DSP)(?:[\s_-]|$)',
               caseSensitive: false,
-            ).hasMatch(audio.devices.single.name.trim())) {
-          selectedAudioId = audio.devices.single.id;
+            ).hasMatch(d.name.trim()),
+            orElse: () => audio.devices.first,
+          );
+          selectedAudioId = candidate.id;
         }
       }
       if (audioReady ||
@@ -499,8 +505,7 @@ class SpeakerSetupController extends ChangeNotifier {
       final changedReady =
           session.state.value.connected &&
           audio.canVerifyIdentity &&
-          (!audioReady ||
-              !_same(session.state.value.deviceId, selectedAudioId));
+          !audioReady;
       if (changedAttempt || changedReady) {
         ++_generation;
         connecting = false;
@@ -686,8 +691,7 @@ class SpeakerSetupController extends ChangeNotifier {
       if (!_disposed &&
           generation == _generation &&
           session.state.value.connected &&
-          audioReady &&
-          (!audio.canVerifyIdentity || _same(id, selectedAudioId))) {
+          audioReady) {
         _autoStarted = true;
         _readyAt = _now();
         // Persistence is separate from synchronized controls and the final OS
